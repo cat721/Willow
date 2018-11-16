@@ -99,14 +99,6 @@ func (TempLChain *TempLedgerChain) AddHeadOfLedgerBlock(hlb *block.HeadOfLB) err
 	if hlb.Epoch == uint32(0){
 		TempLChain.MapTree[hash] = hlb
 		TempLChain.LeavesBlocks[hash] = hlb
-
-
-		fmt.Println("第一个块",hlb.Epoch)
-		fmt.Println("prehash",hlb.PreHash)
-		fmt.Println(TempLChain.SingleBlocks)
-		fmt.Println(TempLChain.MapTree)
-		fmt.Println(TempLChain.LeavesBlocks)
-
 		return nil
 	}
 
@@ -121,13 +113,6 @@ func (TempLChain *TempLedgerChain) AddHeadOfLedgerBlock(hlb *block.HeadOfLB) err
 		if err != nil{
 			return err
 		}
-
-
-		fmt.Println("连向叶子节点",hlb.Epoch)
-		fmt.Println("prehash",hlb.PreHash)
-		fmt.Println(TempLChain.SingleBlocks)
-		fmt.Println(TempLChain.MapTree)
-		fmt.Println(TempLChain.LeavesBlocks)
 		return nil
 	}
 
@@ -140,13 +125,6 @@ func (TempLChain *TempLedgerChain) AddHeadOfLedgerBlock(hlb *block.HeadOfLB) err
 		if err != nil{
 			return err
 		}
-
-
-		fmt.Println("连向中间节点",hlb.Epoch)
-		fmt.Println("prehash",hlb.PreHash)
-		fmt.Println(TempLChain.SingleBlocks)
-		fmt.Println(TempLChain.MapTree)
-		fmt.Println(TempLChain.LeavesBlocks)
 		return nil
 	}
 	//孤块
@@ -177,6 +155,9 @@ func (TempLChain *TempLedgerChain) updateSingleBlocks(hlb *block.HeadOfLB) error
 func (TempLChain *TempLedgerChain) LastLedgerBlock() *block.HeadOfLB {
 
 	llb := block.NewEmptyHLB()
+	if TempLChain == nil{
+		return llb
+	}
 	for _,v := range TempLChain.LeavesBlocks{
 		if v.Epoch > llb.Epoch{
 			llb = v

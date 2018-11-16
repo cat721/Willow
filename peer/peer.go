@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/garyburd/redigo/redis"
+	"github.com/johnnadratowski/golang-neo4j-bolt-driver/log"
 	"io/ioutil"
 	"math/rand"
 	"net"
@@ -18,18 +19,23 @@ import (
 //发消息
 //收消息
 
-const (Delay  = 10
-		LeastTimeOfMining = 5
+const (Delay  = 1
+	   LeastTimeOfMining = 0
+	   LongestTimeOfMining = 1
+	   numOfPeer =1
 	   )
 
 type Peer struct {
 	currentMB *block.MainBlock
+	flag1 chan int
+	flag2 chan int
 	ip string
 	templc *chain.TempLedgerChain
 	//preTempls *chain.TempLedgerChain
 	mc     *chain.MainChain
 	listener net.Listener
 	RemoteIp string
+	owner []byte
 }
 
 
@@ -56,7 +62,7 @@ func (p *Peer) SolveMessage(message *Message.Message) error {
 		}
 		return nil
 	default:
-		return errors.New("Wrong type block!")
+		return errors.New("Error:Wrong type block!")
 	}
 }
 
@@ -67,7 +73,14 @@ func (p *Peer) solveMainBlock(b []byte) error {
 
 	//把这个块放mc上
 	p.mc.AddMainBlock(mb)
-	p.currentMB = p.mc.LastMainBlock()
+	lastMainBlock := p.mc.LastMainBlock()
+	//如果接收了一个新的最后的block，更新current Block
+	if 	p.currentMB.Round < lastMainBlock.Round{
+		p.currentMB = lastMainBlock
+		if string(mb.Owner) != string(p.owner) {
+			p.flag1 <- 1
+		}
+	}
 	return nil
 }
 
@@ -94,7 +107,7 @@ func (p *Peer) solveFirstLB(b []byte) error {
 	time.Sleep(Delay *time.Second)
 	lb := block.NewEmptyLB()
 	lb.ToBlock(b)
-	mbHash,_:= p.mc.LastMainBlock().Hash()
+	mbHash,_:= p.currentMB.Hash()
 
 	if lb.HeadOfLB.MainBlockHash != mbHash{
 		return errors.New("Wrong first Ledger block for current main block!")
@@ -117,6 +130,7 @@ func (p *Peer) solveFirstLB(b []byte) error {
 		if err != nil{
 			return err
 		}
+		p.flag2 <- 1
 	} else {
 		p.templc = chain.NewTempLC(p.mc.LastMainBlock().Round,mbHash)
 		p.templc.AddHeadOfLedgerBlock(lb.HeadOfLB)
@@ -166,7 +180,7 @@ func (p *Peer) ChechHash(hash [32]byte) (bool,error){
 		fmt.Println("Connect to redis error", err)
 		return false,err
 	}
-
+	defer c.Close()
 	//检查在不在mainchain里
 	_,okMC:= p.mc.SingleBlocks[hash]
 	okMCT,err := c.Do("EXISTS",hash)
@@ -189,28 +203,23 @@ func (p *Peer) ChechHash(hash [32]byte) (bool,error){
 	return false,nil
 }
 
-//假装挖矿
-func (p *Peer) MineBlock() error {
-
-
-	s := rand.NewSource(time.Now().Unix())
-	r := rand.New(s)
-
-	miningTime := r.Intn(600)+LeastTimeOfMining*60
-
-	for {
-		fmt.Println(miningTime)
+func NewPeer(ip string,RemoteIp string,owner []byte) *Peer {
+	mb := block.MainBlock{
+					BlockType:uint32(1),
+					Round:uint32(0),
+					Owner:owner,
+					PreHash:[32]byte{},
+					Nonce:uint64(0),
 	}
 
-
-	return nil
-}
-
-func NewPeer(ip string,RemoteIp string) *Peer {
 	p := Peer{
 		ip:ip,
 		RemoteIp:RemoteIp,
 		mc:chain.NewMainChain(),
+		owner:owner,
+		flag1:make(chan int,1),
+		flag2:make(chan int,1),
+		currentMB:&mb,
 	}
 	return &p
 }
@@ -289,3 +298,131 @@ func (p *Peer)handleMessage(conn net.Conn) error {
 	return nil
 }
 
+//假装挖矿
+func (p *Peer) Mine() error {
+	for  {
+		mb,err:= p.MineBlock()
+		if err != nil{
+			fmt.Println(err)
+			continue
+		}
+
+		if mb == nil{
+			continue
+		}
+
+		b,err:= mb.ToJson()
+		fmt.Println("get new block round",mb.Round)
+
+		//将新产生的main block加入到本地视图
+		err = p.solveMainBlock(b)
+		if err != nil{
+			log.Fatal(err)
+			continue
+		}
+		//将产生的新的main block发送出去
+		msg := Message.NewMessage(uint32(1),b)
+		err = p.SendMessage(msg)
+		if err != nil{
+			log.Fatal(err)
+			continue
+		}
+
+		//产生ledger block
+		go p.createLB(mb)
+	}
+	return nil
+}
+
+func (p *Peer) MineBlock() (*block.MainBlock,error) {
+	c := make(chan *block.MainBlock,1)
+
+	go p.mineBlock(c)
+
+	select {
+	case <-p.flag1:
+		fmt.Println("recieve a newer main block")
+		return nil,errors.New("recieve a newer main block")
+	case mb := <-c:
+		fmt.Println("mined a newer main block")
+		return mb,nil
+	}
+}
+
+func (p *Peer) mineBlock(c chan *block.MainBlock) error{
+	defer close(c)
+
+	s := rand.NewSource(time.Now().Unix())
+	r := rand.New(s)
+	miningTime := r.Intn(60*(LongestTimeOfMining-LeastTimeOfMining)*numOfPeer)+LeastTimeOfMining*60
+  	time.Sleep(time.Duration(miningTime)*time.Second)
+	hash,err := p.currentMB.Hash()
+	if err != nil {
+		return nil
+	}
+	mb := block.NewMainBlock(uint32(1),p.currentMB.Round+1,p.owner,hash,uint64(1))
+	c <- mb
+	return nil
+
+}
+
+func (p *Peer) createLB(mb *block.MainBlock) error {
+	preHash := [32]byte{}
+	hash,_:= mb.Hash()
+
+	i := 0
+	for {
+		select {
+		case <- p.flag2:
+			return nil
+		default:
+			if i == 0{
+				preHash,_ = p.templc.LastLedgerBlock().Hash()
+				lb := block.NewLedgerBlock(uint32(1),mb.Round,uint32(i),p.owner,preHash,hash)
+				preHash,_ = lb.HeadOfLB.Hash()
+
+				b,err := lb.ToJson()
+				if err != nil{
+					log.Fatal(err)
+					continue
+				}
+				msg := Message.NewMessage(uint32(3),b)
+
+				err = p.SolveMessage(msg)
+				if err != nil{
+					log.Fatal(err)
+					continue
+				}
+				err = p.SendMessage(msg)
+				if err != nil{
+					log.Fatal(err)
+					continue
+				}
+				time.Sleep(time.Second*1)
+				i++
+			}else {
+				lb := block.NewLedgerBlock(uint32(1),mb.Round,uint32(i),p.owner,preHash,hash)
+				preHash,_ = lb.HeadOfLB.Hash()
+				b,err := lb.ToJson()
+				if err != nil{
+					log.Fatal(err)
+					continue
+				}
+				msg := Message.NewMessage(uint32(2),b)
+
+				err = p.SolveMessage(msg)
+				if err != nil{
+					log.Fatal(err)
+					continue
+				}
+				err = p.SendMessage(msg)
+				if err != nil{
+					log.Fatal(err)
+					continue
+				}
+				i++
+			}
+		}
+	}
+	return nil
+}

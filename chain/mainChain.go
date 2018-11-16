@@ -36,7 +36,7 @@ func (mc *MainChain) AddMainBlock(mb *block.MainBlock) error {
 	if err != nil{
 		return err
 	}
-fmt.Println("the hash is",hash)
+	fmt.Println("the hash is",hash)
 	
 	defer c.Close()
 

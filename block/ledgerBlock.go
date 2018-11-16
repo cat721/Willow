@@ -1,7 +1,6 @@
 package block
 
 import (
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 )
@@ -33,7 +32,7 @@ func (lb *LedgerBlock) ToJson() ([]byte,error) {
 	return jsonBytes,err
 }
 
-func (lb LedgerBlock) Hash() ([32]byte,error) {
+/*func (lb LedgerBlock) Hash() ([32]byte,error) {
 	bytes,err := lb.ToJson()
 	if err != nil {
 		return [32]byte{},err
@@ -42,6 +41,7 @@ func (lb LedgerBlock) Hash() ([32]byte,error) {
 	hash := sha256.Sum256(bytes)
 	return  hash,nil
 }
+*/
 
 func (lb *LedgerBlock) ToBlock(b []byte) error {
 	err := json.Unmarshal(b,lb)
@@ -50,7 +50,6 @@ func (lb *LedgerBlock) ToBlock(b []byte) error {
 	}
 	return nil
 	}
-
 
 func NewLedgerBlock(blocktype uint32,round uint32,epoch uint32,owner []byte,preHash [SizeOfHash]byte,mainBlockHash [SizeOfHash]byte) *LedgerBlock {
 

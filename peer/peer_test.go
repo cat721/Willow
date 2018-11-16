@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
 )
 
 func TestPeer_RecieveMessage(t *testing.T) {
-	p := NewPeer("localhost:8000","localhost:8888")
+	p := NewPeer("localhost:8000","localhost:8888",[]byte("以战止战"))
 	p.StartListen()
 
 	mb := block.NewMainBlock(uint32(1),uint32(1),[]byte("以战止战"),[32]byte{},uint64(2))
@@ -46,7 +47,7 @@ func TestPeer_SolveMessage(t *testing.T) {
 
 	msg := Message.NewMessage(mb.BlockType,b)
 
-	p := NewPeer("localhost:8000","localhost:8888")
+	p := NewPeer("localhost:8000","localhost:8888",[]byte("以战止战"))
 
 	err = p.SolveMessage(msg)
 	fmt.Println(err)
@@ -68,3 +69,66 @@ func TestPeer_SolveMessage(t *testing.T) {
 	fmt.Println(err)
 }
 
+func TestPeer_mine(t *testing.T) {
+	p := NewPeer("localhost:8000","localhost:8888",[]byte("以战止战"))
+	listener,err := net.Listen("tcp","localhost:8888")
+	if err != nil{
+		fmt.Println("can not create listener on 8888\n because of",err)
+	}
+	p.listener = listener
+
+	go func() {
+		for{
+			conn,err := listener.Accept()
+			if err != nil{
+				fmt.Println("请求监听失败!")
+				continue
+			}
+			fmt.Println("listen",conn.RemoteAddr().String())
+			defer conn.Close()
+		}}()
+	p.Mine()
+
+}
+
+func Test_createLB(t *testing.T){
+	p := NewPeer("localhost:8000","localhost:8888",[]byte("以战止战"))
+
+	listener,err := net.Listen("tcp","localhost:8888")
+	if err != nil{
+		fmt.Println("can not create listener on 8888\n because of",err)
+	}
+	p.listener = listener
+
+	go func() {
+		for{
+			conn,err := listener.Accept()
+			if err != nil{
+				fmt.Println("请求监听失败!")
+				continue
+			}
+		fmt.Println("listen",conn.RemoteAddr().String())
+			defer conn.Close()
+	}}()
+
+
+	//time.Sleep(time.Second*5)
+	mb := block.NewMainBlock(uint32(1),uint32(1),[]byte("以战止战"),[32]byte{},uint64(2))
+	prehash,_ :=mb.Hash()
+	b,err := mb.ToJson()
+	if err != nil{
+		fmt.Println(err)
+	}
+	msg := Message.NewMessage(mb.BlockType,b)
+	err = p.SolveMessage(msg)
+
+	go p.createLB(mb)
+	time.Sleep(time.Second*10)
+	mb = block.NewMainBlock(uint32(1),uint32(1),[]byte("以战止战"),prehash,uint64(2))
+	b,err = mb.ToJson()
+	if err != nil{
+		fmt.Println(err)
+	}
+	msg = Message.NewMessage(mb.BlockType,b)
+	err = p.SolveMessage(msg)
+}
