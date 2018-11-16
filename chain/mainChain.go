@@ -36,7 +36,8 @@ func (mc *MainChain) AddMainBlock(mb *block.MainBlock) error {
 	if err != nil{
 		return err
 	}
-	fmt.Println("the hash is",hash)
+//
+//	fmt.Println("the hash is",hash)
 	
 	defer c.Close()
 
@@ -45,15 +46,11 @@ func (mc *MainChain) AddMainBlock(mb *block.MainBlock) error {
 
 		err := storemb(mb,c)
 		if err != nil{
+			fmt.Println(err)
 			return err
 		}
 		mc.LongestLeaves[hash] = mb
 
-
-		fmt.Println("第一个块",mb.PreHash)
-		fmt.Println("prehash",mb.PreHash)
-		fmt.Println(mc.SingleBlocks)
-		fmt.Println(mc.LongestLeaves)
 		return nil
 	}
 
@@ -63,6 +60,7 @@ func (mc *MainChain) AddMainBlock(mb *block.MainBlock) error {
 
 		err := storemb(mb,c)
 		if err != nil{
+			fmt.Println(err)
 			return err
 		}
 
@@ -71,14 +69,10 @@ func (mc *MainChain) AddMainBlock(mb *block.MainBlock) error {
 
 		err = mc.updateSingleBlocks(mb,c)
 		if err != nil{
+			fmt.Println(err)
 			return err
 		}
 
-
-		fmt.Println("连向叶子节点",mb.Round)
-		fmt.Println("prehash",mb.PreHash)
-		fmt.Println(mc.SingleBlocks)
-		fmt.Println(mc.LongestLeaves)
 		return nil
 	}
 
@@ -91,13 +85,10 @@ func (mc *MainChain) AddMainBlock(mb *block.MainBlock) error {
 		mc.LongestLeaves[hash] = mb
 		err := mc.updateSingleBlocks(mb,c)
 		if err != nil{
+			fmt.Println(err)
 			return err
 		}
 
-		fmt.Println("连向中间节点",mb.Round)
-		fmt.Println("prehash",mb.PreHash)
-		fmt.Println(mc.SingleBlocks)
-		fmt.Println(mc.LongestLeaves)
 		return nil
 	}
 	//孤块

@@ -19,9 +19,9 @@ import (
 //发消息
 //收消息
 
-const (Delay  = 1
-	   LeastTimeOfMining = 0
-	   LongestTimeOfMining = 1
+const (Delay  = 2
+	   LeastTimeOfMining = 1
+	   LongestTimeOfMining = 2
 	   numOfPeer =1
 	   )
 
@@ -89,7 +89,7 @@ func (p *Peer) solveLedgerBlock(b []byte) error {
 	lb.ToBlock(b)
 
 	round := lb.HeadOfLB.Round
-
+	fmt.Println("Now the templedger is round",round)
 	//如果接到的消息比较当前的round要靠后，就等一会
 	if round > p.templc.Round{
 		time.Sleep(Delay*time.Second)
@@ -98,7 +98,8 @@ func (p *Peer) solveLedgerBlock(b []byte) error {
 		p.templc.AddHeadOfLedgerBlock(lb.HeadOfLB)
 		return nil
 	}
-	return errors.New("wrong round ledger block")
+	//return errors.New("wrong round ledger block")
+	return nil
 }
 
 func (p *Peer) solveFirstLB(b []byte) error {
@@ -239,6 +240,7 @@ func (p *Peer) StartListen() error {
 			continue
 		}
 		fmt.Println("listen",conn.RemoteAddr().String())
+		conn.SetReadDeadline(time.Now().Add(time.Duration(10) * time.Second))
 		go p.handleMessage(conn)
 	}
 }
@@ -249,22 +251,32 @@ func (p *Peer) SendMessage(msg *Message.Message) error{
 
 	conn,err := net.Dial("tcp",p.RemoteIp)
 	if err != nil {
-		fmt.Println(err)
-	}
-
-	defer conn.Close()
-	_,err = conn.Write(buf.Bytes())
-	if err != nil {
+		fmt.Println("can not create the connenct:",err)
 		return err
 	}
-	fmt.Println("Successful send the message!")
+
+	defer func() {
+		err := conn.Close()
+		if err != nil{
+			fmt.Println("close connnection false:",err)
+		}
+	}()
+	_,err = conn.Write(buf.Bytes())
+	if err != nil {
+		fmt.Println("write the message wrong:",err)
+		return err
+	}
+//	fmt.Println("Successful send the message!")
 	return nil
 }
 
 func (p *Peer)handleMessage(conn net.Conn) error {
 	defer func() {
-		conn.Close()
+		err:=conn.Close()
 		fmt.Println("close connection")
+		if err != nil{
+			fmt.Println("write the message wrong:",err)
+		}
 	}()
 	b,err := ioutil.ReadAll(conn)
 	if err != nil {
@@ -313,7 +325,6 @@ func (p *Peer) Mine() error {
 
 		b,err:= mb.ToJson()
 		fmt.Println("get new block round",mb.Round)
-
 		//将新产生的main block加入到本地视图
 		err = p.solveMainBlock(b)
 		if err != nil{
@@ -330,7 +341,7 @@ func (p *Peer) Mine() error {
 
 		//产生ledger block
 		go p.createLB(mb)
-	}
+}
 	return nil
 }
 
@@ -355,7 +366,10 @@ func (p *Peer) mineBlock(c chan *block.MainBlock) error{
 	s := rand.NewSource(time.Now().Unix())
 	r := rand.New(s)
 	miningTime := r.Intn(60*(LongestTimeOfMining-LeastTimeOfMining)*numOfPeer)+LeastTimeOfMining*60
-  	time.Sleep(time.Duration(miningTime)*time.Second)
+	fmt.Println("mining time is",miningTime)
+ 	time.Sleep(time.Duration(miningTime)*time.Second)
+
+//	time.Sleep(time.Second*9)
 	hash,err := p.currentMB.Hash()
 	if err != nil {
 		return nil
@@ -399,6 +413,7 @@ func (p *Peer) createLB(mb *block.MainBlock) error {
 					continue
 				}
 				time.Sleep(time.Second*1)
+				fmt.Println("create round",lb.HeadOfLB.Round,"epoch",lb.HeadOfLB.Epoch)
 				i++
 			}else {
 				lb := block.NewLedgerBlock(uint32(1),mb.Round,uint32(i),p.owner,preHash,hash)
@@ -420,6 +435,8 @@ func (p *Peer) createLB(mb *block.MainBlock) error {
 					log.Fatal(err)
 					continue
 				}
+				time.Sleep(time.Second*1)
+				fmt.Println("create round",lb.HeadOfLB.Round,"epoch",lb.HeadOfLB.Epoch)
 				i++
 			}
 		}

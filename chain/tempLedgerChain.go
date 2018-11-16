@@ -60,7 +60,7 @@ func (TempLChain *TempLedgerChain) ExtractLedgerChain(hlb *block.HeadOfLB) error
 			return err
 		}
 		preHash := hlb.PreHash
-		fmt.Println(preHash)
+	//	fmt.Println(preHash)
 
 		hlb,ok = TempLChain.MapTree[preHash]
 
@@ -170,7 +170,7 @@ func storehlb(hlb *block.HeadOfLB,c redis.Conn) error{
 
 	hash,_ := hlb.Hash()
 
-	fmt.Println("adding the ",hlb.Epoch,"epoch")
+//	fmt.Println("adding the ",hlb.Epoch,"epoch")
 
 	_,err := c.Do("HMSET",hash,"BlockType",hlb.BlockType,
 								 	 	 	  "Round",hlb.Round,

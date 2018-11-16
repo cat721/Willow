@@ -5,6 +5,7 @@ import (
 	"Willow/block"
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"testing"
 	"time"
@@ -75,7 +76,6 @@ func TestPeer_mine(t *testing.T) {
 	if err != nil{
 		fmt.Println("can not create listener on 8888\n because of",err)
 	}
-	p.listener = listener
 
 	go func() {
 		for{
@@ -84,9 +84,27 @@ func TestPeer_mine(t *testing.T) {
 				fmt.Println("请求监听失败!")
 				continue
 			}
-			fmt.Println("listen",conn.RemoteAddr().String())
 			defer conn.Close()
-		}}()
+
+			b,err := ioutil.ReadAll(conn)
+			if err != nil {
+				fmt.Println("read code error: ", err)
+			}
+
+			buf := new(bytes.Buffer)
+			buf.Write(b)
+			m := Message.Message{}
+			err = m.Deserialize(buf)
+			if err  != nil{
+				fmt.Println(err)
+			}
+
+			fmt.Println("receive a message!")
+
+		}
+	}()
+
+
 	p.Mine()
 
 }
@@ -107,7 +125,7 @@ func Test_createLB(t *testing.T){
 				fmt.Println("请求监听失败!")
 				continue
 			}
-		fmt.Println("listen",conn.RemoteAddr().String())
+		//fmt.Println("listen",conn.RemoteAddr().String())
 			defer conn.Close()
 	}}()
 
@@ -121,14 +139,23 @@ func Test_createLB(t *testing.T){
 	}
 	msg := Message.NewMessage(mb.BlockType,b)
 	err = p.SolveMessage(msg)
-
+//	<- p.flag1
 	go p.createLB(mb)
+
+
 	time.Sleep(time.Second*10)
-	mb = block.NewMainBlock(uint32(1),uint32(1),[]byte("以战止战"),prehash,uint64(2))
+	mb = block.NewMainBlock(uint32(1),uint32(2),[]byte("以战止战"),prehash,uint64(2))
 	b,err = mb.ToJson()
 	if err != nil{
 		fmt.Println(err)
 	}
 	msg = Message.NewMessage(mb.BlockType,b)
 	err = p.SolveMessage(msg)
+	go p.createLB(mb)
+
+	time.Sleep(time.Second*10)
+	p.flag2<-1
+
+	fmt.Println("finnished!")
 }
+
