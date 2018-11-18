@@ -322,6 +322,11 @@ func (p *Peer)handleMessage(conn net.Conn) error {
 		return err
 	}
 	fmt.Println("recieve a message!")
+	err = p.SendMessage(&m)
+	if err != nil{
+		fmt.Println(err)
+		return nil
+	}
 
 	return nil
 }
