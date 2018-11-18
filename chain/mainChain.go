@@ -148,14 +148,17 @@ func existmb(hash interface{},c redis.Conn) (bool,error) {
 
 	fmt.Println("is the ",hash,"exist?")
 	ok,err := c.Do("EXISTS",hash)
-	is := ok.(bool)
+	is := ok.(int64)
 
 	if err != nil {
 		fmt.Println("redis set failed:", err)
 		return false,err
 	}
 
-	return is,nil
+	if is != 0{
+		return true,nil
+	}
+	return false,nil
 }
 
 func (mc *MainChain) updateSingleBlocks(mb *block.MainBlock,c redis.Conn) error {

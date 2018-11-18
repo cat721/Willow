@@ -20,8 +20,8 @@ import (
 //收消息
 
 const (Delay  = 2
-	   LeastTimeOfMining = 1
-	   LongestTimeOfMining = 2
+	   LeastTimeOfMining = 0
+	   LongestTimeOfMining = 1
 	   numOfPeer =1
 	   )
 
@@ -91,12 +91,14 @@ func (p *Peer) solveLedgerBlock(b []byte) error {
 	round := lb.HeadOfLB.Round
 	fmt.Println("Now the templedger is round",round)
 	//如果接到的消息比较当前的round要靠后，就等一会
-	if round > p.templc.Round{
-		time.Sleep(Delay*time.Second)
-	}
+	//if round > p.templc.Round{
+	//	time.Sleep(Delay*time.Second)
+	//}
 	if round == p.templc.Round{
-		p.templc.AddHeadOfLedgerBlock(lb.HeadOfLB)
-		return nil
+		if string(p.currentMB.Owner) == string(lb.HeadOfLB.Owner){
+			p.templc.AddHeadOfLedgerBlock(lb.HeadOfLB)
+			return nil
+		}
 	}
 	//return errors.New("wrong round ledger block")
 	return nil
@@ -105,7 +107,7 @@ func (p *Peer) solveLedgerBlock(b []byte) error {
 func (p *Peer) solveFirstLB(b []byte) error {
 
 	//等一会确认主块收到了
-	time.Sleep(Delay *time.Second)
+	time.Sleep(Delay*time.Second)
 	lb := block.NewEmptyLB()
 	lb.ToBlock(b)
 	mbHash,_:= p.currentMB.Hash()
@@ -189,6 +191,11 @@ func (p *Peer) ChechHash(hash [32]byte) (bool,error){
 		return false,err
 	}
 
+	okmct := false
+	if okMCT.(int64) != 0{
+		okmct = true
+	}
+
 	//检查在不在ledgerChain中
 	_,okLCT := p.templc.MapTree[hash]
 	_,okLC := p.templc.SingleBlocks[hash]
@@ -198,7 +205,7 @@ func (p *Peer) ChechHash(hash [32]byte) (bool,error){
 	//_,okPLC := p.preTempls.SingleBlocks[hash]
 
 
-	if okMC ||okLC || okLCT || okMCT.(bool){
+	if okMC ||okLC || okLCT || okmct {
 		return true,nil
 	}
 	return false,nil
@@ -213,15 +220,19 @@ func NewPeer(ip string,RemoteIp string,owner []byte) *Peer {
 					Nonce:uint64(0),
 	}
 
+
+
 	p := Peer{
 		ip:ip,
 		RemoteIp:RemoteIp,
 		mc:chain.NewMainChain(),
+		templc:chain.NewTLC(),
 		owner:owner,
 		flag1:make(chan int,1),
 		flag2:make(chan int,1),
 		currentMB:&mb,
 	}
+
 	return &p
 }
 
@@ -232,6 +243,7 @@ func (p *Peer) StartListen() error {
 		return err
 	}
 	p.listener = listener
+	defer listener.Close()
 
 	for{
 		conn,err := listener.Accept()
@@ -279,6 +291,9 @@ func (p *Peer)handleMessage(conn net.Conn) error {
 		}
 	}()
 	b,err := ioutil.ReadAll(conn)
+
+	fmt.Println("recieve a message!")
+
 	if err != nil {
 		fmt.Println("read code error: ", err)
 		return err
@@ -306,6 +321,7 @@ func (p *Peer)handleMessage(conn net.Conn) error {
 	if err  != nil{
 		return err
 	}
+	fmt.Println("recieve a message!")
 
 	return nil
 }

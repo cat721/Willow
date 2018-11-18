@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"sync"
 	"testing"
 	"time"
 )
@@ -77,8 +78,11 @@ func TestPeer_mine(t *testing.T) {
 		fmt.Println("can not create listener on 8888\n because of",err)
 	}
 
+	defer listener.Close()
+
 	go func() {
 		for{
+
 			conn,err := listener.Accept()
 			if err != nil{
 				fmt.Println("请求监听失败!")
@@ -159,3 +163,26 @@ func Test_createLB(t *testing.T){
 	fmt.Println("finnished!")
 }
 
+func TestPeer_1(t *testing.T) {
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	p := NewPeer("localhost:8000","localhost:8888",[]byte("以战止战"))
+	go p.StartListen()
+	go p.Mine()
+
+	wg.Wait()
+
+}
+
+func TestPeer_2(t *testing.T){
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	p2 := NewPeer("localhost:8888","localhost:8000",[]byte("至尊宝"))
+	go p2.StartListen()
+//	go p2.Mine()
+
+	wg.Wait()
+}

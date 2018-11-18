@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	SizeOfPayload = 1 << 17 //1M byte
+	SizeOfPayload = 18 //2M byte
 	SizeOfHash = 32
 )
 
