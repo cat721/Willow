@@ -13,7 +13,7 @@ import (
 )
 
 func TestPeer_RecieveMessage(t *testing.T) {
-	p := NewPeer("localhost:8000","localhost:8888",[]byte("以战止战"))
+	p := NewPeer("localhost:8000","localhost:8888",[]byte("以战止战"),1234567)
 	p.StartListen()
 
 	mb := block.NewMainBlock(uint32(1),uint32(1),[]byte("以战止战"),[32]byte{},uint64(2))
@@ -49,7 +49,7 @@ func TestPeer_SolveMessage(t *testing.T) {
 
 	msg := Message.NewMessage(mb.BlockType,b)
 
-	p := NewPeer("localhost:8000","localhost:8888",[]byte("以战止战"))
+	p := NewPeer("localhost:8000","localhost:8888",[]byte("以战止战"),1234567)
 
 	err = p.SolveMessage(msg)
 	fmt.Println(err)
@@ -72,7 +72,7 @@ func TestPeer_SolveMessage(t *testing.T) {
 }
 
 func TestPeer_mine(t *testing.T) {
-	p := NewPeer("localhost:8000","localhost:8888",[]byte("以战止战"))
+	p := NewPeer("localhost:8000","localhost:8888",[]byte("以战止战"),1234567)
 	listener,err := net.Listen("tcp","localhost:8888")
 	if err != nil{
 		fmt.Println("can not create listener on 8888\n because of",err)
@@ -114,7 +114,10 @@ func TestPeer_mine(t *testing.T) {
 }
 
 func Test_createLB(t *testing.T){
-	p := NewPeer("localhost:8000","localhost:8888",[]byte("以战止战"))
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	p := NewPeer("localhost:8000","localhost:8888",[]byte("以战止战"),1234567)
 
 	listener,err := net.Listen("tcp","localhost:8888")
 	if err != nil{
@@ -157,8 +160,7 @@ func Test_createLB(t *testing.T){
 	err = p.SolveMessage(msg)
 	go p.createLB(mb)
 
-	time.Sleep(time.Second*10)
-	p.flag2<-1
+	wg.Wait()
 
 	fmt.Println("finnished!")
 }
@@ -168,7 +170,7 @@ func TestPeer_1(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	p := NewPeer("localhost:8000","localhost:8888",[]byte("以战止战"))
+	p := NewPeer("localhost:8000","localhost:8888",[]byte("以战止战"),1234567)
 	go p.StartListen()
 	go p.Mine()
 
@@ -180,9 +182,23 @@ func TestPeer_2(t *testing.T){
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	p2 := NewPeer("localhost:8888","localhost:8000",[]byte("至尊宝"))
+	p2 := NewPeer("localhost:8888","localhost:8000",[]byte("至尊宝"),1)
 	go p2.StartListen()
-//	go p2.Mine()
+	go p2.Mine()
+
+	wg.Wait()
+}
+
+func TestPeer_3(t *testing.T){
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	p := NewPeer("localhost:8000","localhost:8888",[]byte("以战止战"),1234567)
+	go p.StartListen()
+
+	p2 := NewPeer("localhost:8888","localhost:8000",[]byte("至尊宝"),1)
+	go p2.StartListen()
+	go p2.Mine()
 
 	wg.Wait()
 }

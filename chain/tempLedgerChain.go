@@ -36,11 +36,11 @@ func NewTLC() *TempLedgerChain{
 func (TempLChain *TempLedgerChain) ExtractLedgerChain(hlb *block.HeadOfLB) error {
 
 	if TempLChain.Round != hlb.Round-1 {
-		return errors.New("The first ledgerblock is not belong to next round")
+		return errors.New("[ExtractLedgerChain]:The first ledgerblock is not belong to next round")
 	}
 	_,ok := TempLChain.MapTree[hlb.PreHash]
 	if !ok {
-		return errors.New("wrong local tempLedgerChain")
+		return errors.New("[ExtractLedgerChain]:wrong local tempLedgerChain")
 	}
 	//存入数据库中
 	c, err := redis.Dial("tcp", RedisAdd)
@@ -69,6 +69,7 @@ func (TempLChain *TempLedgerChain) ExtractLedgerChain(hlb *block.HeadOfLB) error
 		}
 
 	}
+	//fmt.Println("Don not get the last ledger block!")
 	return nil
 }
 

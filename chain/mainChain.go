@@ -101,7 +101,7 @@ func storemb(mb *block.MainBlock,c redis.Conn) error{
 
 	hash,_ := mb.Hash()
 
-	fmt.Println("adding the ",mb.Round,"round")
+	fmt.Println("adding the main block in",mb.Round,"round")
 
 	_,err := c.Do("HMSET",hash,"BlockType",mb.BlockType,
 											 "Round",mb.Round,
