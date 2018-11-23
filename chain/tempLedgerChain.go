@@ -5,9 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"github.com/garyburd/redigo/redis"
+	"os"
 )
 
-const RedisAdd = "127.0.0.1:6379"
+//const RedisAdd = "127.0.0.1:6379"
+var RedisAdd string
+
+func init() {
+	RedisAdd = os.Getenv("RedisAdd")
+}
 
 type TempLedgerChain struct {
 	Round uint32

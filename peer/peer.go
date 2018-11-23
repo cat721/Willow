@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net"
+	"os"
 	"strconv"
 	"time"
 )
@@ -21,12 +22,19 @@ import (
 //发消息
 //收消息
 
-const (Delay  = 1
-	   LeastTimeOfMining = 1
-	   LongestTimeOfMining = 3
-	   numOfPeer = 1
-	   IntervalOfLB = 3
-	   )
+var Delay int
+var	LeastTimeOfMining int
+var LongestTimeOfMining int
+var	numOfPeer int
+var IntervalOfLB int
+
+func init() {
+	Delay ,_ = strconv.Atoi(os.Getenv("Delay"))
+	LeastTimeOfMining,_  = strconv.Atoi(os.Getenv("LeastTimeOfMining"))
+	LongestTimeOfMining,_ = strconv.Atoi(os.Getenv("LongestTimeOfMining"))
+	numOfPeer,_= strconv.Atoi(os.Getenv("numOfPeer"))
+	IntervalOfLB,_ = strconv.Atoi(os.Getenv("IntervalOfLB"))
+}
 
 type Peer struct {
 	currentMB *block.MainBlock
@@ -93,6 +101,11 @@ func (p *Peer) solveLedgerBlock(b []byte) error {
 	lb := block.NewEmptyLB()
 	lb.ToBlock(b)
 
+	if string(lb.HeadOfLB.Owner) != string(p.currentMB.Owner){
+
+		log.Println("[info]-[solveLedgerBlock]:not the right onwer!")
+		return nil
+	}
 	err := p.templc.AddHeadOfLedgerBlock(lb.HeadOfLB)
 	if err !=nil {
 		log.Println("\n\n[solveLedgerBlock]:Fail add ledger block:in round",lb.HeadOfLB.Round,"epoch",lb.HeadOfLB.Epoch,"::",err,"\n\n")
@@ -359,7 +372,7 @@ func (p *Peer) handleMessage(conn net.Conn) error {
 
 //假装挖矿
 func (p *Peer) Mine() error {
-	for  {
+	for {
 		mb:= p.MineBlock()
 
 		if p.isMining == true{
@@ -385,7 +398,7 @@ func (p *Peer) Mine() error {
 			log.Fatal(err)
 			continue
 		}
-		time.Sleep(time.Second* IntervalOfLB)
+		time.Sleep(time.Second*time.Duration(IntervalOfLB))
 		//产生ledger block
 		go p.createLB(mb)
 }
@@ -471,7 +484,7 @@ func (p *Peer) createLB(mb *block.MainBlock) error {
 					}
 
 					p.isMining = true
-					time.Sleep(time.Second*IntervalOfLB)
+					time.Sleep(time.Second*time.Duration(IntervalOfLB))
 					//log.Println(string(p.owner),"create round",lb.HeadOfLB.Round,"epoch",lb.HeadOfLB.Epoch)
 					i++
 				}else {
@@ -494,7 +507,7 @@ func (p *Peer) createLB(mb *block.MainBlock) error {
 						log.Fatal(err)
 						continue
 					}
-					time.Sleep(time.Second* IntervalOfLB)
+					time.Sleep(time.Second* time.Duration(IntervalOfLB))
 					//log.Println(string(p.owner),"create round",lb.HeadOfLB.Round,"epoch",lb.HeadOfLB.Epoch)
 					i++
 				}
@@ -545,3 +558,5 @@ func readMessage(msg *Message.Message) string{
 	}
 	return "can not read the message"
 }
+
+
