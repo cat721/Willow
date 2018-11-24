@@ -9,11 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/garyburd/redigo/redis"
-	"log"
 	"io/ioutil"
+	"log"
 	"math/rand"
 	"net"
-	"os"
 	"strconv"
 	"time"
 )
@@ -21,7 +20,7 @@ import (
 //连接
 //发消息
 //收消息
-
+/*
 var Delay int
 var	LeastTimeOfMining int
 var LongestTimeOfMining int
@@ -35,13 +34,23 @@ func init() {
 	numOfPeer,_= strconv.Atoi(os.Getenv("numOfPeer"))
 	IntervalOfLB,_ = strconv.Atoi(os.Getenv("IntervalOfLB"))
 }
+*/
+
+const (Delay  = 1
+	LeastTimeOfMining = 100
+	LongestTimeOfMining = 300
+	numOfPeer = 2
+	IntervalOfLB = 3
+	W = 2
+)
 
 type Peer struct {
 	currentMB *block.MainBlock
+	minedMB *block.MainBlock
 	flag1 chan int
-	flag2 chan int
+	flag2 map[int]chan int
 	ip string
-	templc *chain.TempLedgerChain
+	templc map[uint32]*chain.TempLedgerChain
 	//preTempls *chain.TempLedgerChain
 	mc     *chain.MainChain
 	listener net.Listener
@@ -100,13 +109,13 @@ func (p *Peer) solveMainBlock(b []byte) error {
 func (p *Peer) solveLedgerBlock(b []byte) error {
 	lb := block.NewEmptyLB()
 	lb.ToBlock(b)
-
-	if string(lb.HeadOfLB.Owner) != string(p.currentMB.Owner){
-
-		log.Println("[info]-[solveLedgerBlock]:not the right onwer!")
+	round := lb.HeadOfLB.Round
+	_,ok := p.templc[round]
+	if!ok {
+		log.Println("\n\n[solveLedgerBlock]:Fail add ledger block:in round",lb.HeadOfLB.Round,"epoch",lb.HeadOfLB.Epoch,"\n\n")
 		return nil
 	}
-	err := p.templc.AddHeadOfLedgerBlock(lb.HeadOfLB)
+	err := p.templc[round].AddHeadOfLedgerBlock(lb.HeadOfLB)
 	if err !=nil {
 		log.Println("\n\n[solveLedgerBlock]:Fail add ledger block:in round",lb.HeadOfLB.Round,"epoch",lb.HeadOfLB.Epoch,"::",err,"\n\n")
 		//log.Fatal(err)
@@ -117,33 +126,6 @@ func (p *Peer) solveLedgerBlock(b []byte) error {
 
 }
 
-/*func (p *Peer) solveLedgerBlock(b []byte) error {
-	lb := block.NewEmptyLB()
-	lb.ToBlock(b)
-
-	round := lb.HeadOfLB.Round
-	//log.Println("[solveLedgerBlock]:Now the templedger is round",round)
-	//如果接到的消息比较当前的round要靠后，就等一会
-	//if round > p.templc.Round{
-	//	time.Sleep(Delay*time.Second)
-	//}
-	if round == p.templc.Round{
-		if string(p.currentMB.Owner) == string(lb.HeadOfLB.Owner){
-			err := p.templc.AddHeadOfLedgerBlock(lb.HeadOfLB)
-			if err !=nil {
-				fmt.Println("[solveLedgerBlock]:Fail add ledger block:",err)
-				log.Fatal(err)
-			}
-			log.Println("[solveLedgerBlock]:successfully add round",lb.HeadOfLB.Round,"epoch",lb.HeadOfLB.Epoch)
-			return nil
-		}
-	}
-
-	log.Println("[solveLedgerBlock]:Now the round of main chain is",round,"but recieve a ledger block in round",lb.HeadOfLB.Round,"epoch",lb.HeadOfLB.Epoch)
-	return nil
-
-}*/
-
 func (p *Peer) solveFirstLB(b []byte) error {
 	fmt.Println("=============Start solve first ledger block!===========")
 	//等一会确认主块收到了
@@ -151,44 +133,42 @@ func (p *Peer) solveFirstLB(b []byte) error {
 	lb := block.NewEmptyLB()
 	lb.ToBlock(b)
 	mbHash,_:= p.currentMB.Hash()
+	round := lb.HeadOfLB.Round
 
 	if lb.HeadOfLB.MainBlockHash != mbHash{
 		log.Println("\n\n[error]-[solveFirstLB]:Wrong first Ledger block for current main block!\n\n")
-		log.Println("\n\n[error]-[solveFirstLB]:current tlc round is",p.templc.Round)
+		log.Println("\n\n[error]-[solveFirstLB]:current tlc round is",round)
 		log.Println("[error]-[solveFirstLB]:recieved lb round is",lb.HeadOfLB.Round,"\n\n")
 		return errors.New("\n\n[error]-[solveFirstLB]:Wrong first Ledger block for current main block!\n\n")
 	}
 
-	if lb.HeadOfLB.Round != 1{
+	if lb.HeadOfLB.Round > W{
 		//如果当前的last main block 不是这个first ledger block的就哭呗
 
-		round := lb.HeadOfLB.Round
-		if round != p.templc.Round + 1{
-			log.Println("\n\n[error]-[solveFirstLB]:current tlc round is",p.templc.Round)
-			log.Println("[error]-[solveFirstLB]:recieved lb round is",round,"\n\n")
-			return errors.New("[solveFirstLB]:Wrong round first Ledger block!")
-		}
-		err := p.templc.ExtractLedgerChain(lb.HeadOfLB)
+
+		err := p.templc[round-W].ExtractLedgerChain(lb.HeadOfLB)
 		if err != nil{
 			fmt.Println("\n\n[error]-[solveFirstLB]:Fail extract ledger chain of round",lb.HeadOfLB.Round,err,"\n\n")
 			return err
 		}
 
-		p.templc = chain.NewTempLC(round,mbHash)
-		err = p.templc.AddHeadOfLedgerBlock(lb.HeadOfLB)
+		delete(p.templc,round-W)
+
+		p.templc[round] = chain.NewTempLC(round,mbHash)
+		err = p.templc[round].AddHeadOfLedgerBlock(lb.HeadOfLB)
 		if err != nil{
 			fmt.Println("\n\n[error]-[solveFirstLB]:Fail add first ledger chain of round",lb.HeadOfLB.Round,err,"\n\n")
 			return err
 		}
 
-		/*if p.isMining == true{
-			p.flag2 <- 1
-		}*/
-
 		log.Println("[solveFirstLB]:successfully add the first ledger block in round",lb.HeadOfLB.Round)
 	} else {
-		p.templc = chain.NewTempLC(p.mc.LastMainBlock().Round,mbHash)
-		p.templc.AddHeadOfLedgerBlock(lb.HeadOfLB)
+		p.templc[round] = chain.NewTempLC(round,mbHash)
+		err := p.templc[round].AddHeadOfLedgerBlock(lb.HeadOfLB)
+		if err != nil{
+			fmt.Println("\n\n[error]-[solveFirstLB]:Fail add first ledger chain of round",lb.HeadOfLB.Round,err,"\n\n")
+			return err
+		}
 		log.Println("[solveFirstLB]:successfully add the first ledger block in round",lb.HeadOfLB.Round)
 	}
 	return nil
@@ -210,41 +190,6 @@ func (p *Peer) ChechMessage(hash [32]byte) (bool,error) {
 	}
 	return false,nil
 }
-
-/*func (p *Peer) ChechHash(hash [32]byte) (bool,error){
-	c, err := redis.Dial("tcp", chain.RedisAdd)
-	if err != nil {
-		fmt.Println("Connect to redis error", err)
-		return false,err
-	}
-	defer c.Close()
-	//检查在不在mainchain里
-	_,okMC:= p.mc.SingleBlocks[hash]
-	okMCT,err := c.Do("EXISTS",hash)
-	if err!=nil{
-		return false,err
-	}
-
-	okmct := false
-	if okMCT.(int64) != 0{
-		okmct = true
-	}
-
-	//检查在不在ledgerChain中
-	_,okLCT := p.templc.MapTree[hash]
-	_,okLC := p.templc.SingleBlocks[hash]
-
-	//检查在不在preLedger中
-	//_,okPLCT := p.preTempls.MapTree[hash]
-	//_,okPLC := p.preTempls.SingleBlocks[hash]
-
-
-	if okMC ||okLC || okLCT || okmct {
-		return true,nil
-	}
-	return false,nil
-}
-*/
 
 func (p *Peer) StartListen() error {
 	listener,err := net.Listen("tcp",p.ip)
@@ -373,19 +318,34 @@ func (p *Peer) handleMessage(conn net.Conn) error {
 //假装挖矿
 func (p *Peer) Mine() error {
 	for {
+		round := int(p.currentMB.Round)+1
 		mb:= p.MineBlock()
+		flag := make(chan int,1)
+		p.flag2[round] = flag
 
-		if p.isMining == true{
-			p.flag2 <- 1
-		}
 
 		if mb == nil{
+			if p.isMining == true{
+				_,ok := p.flag2[round-W]
+				if ok{
+					p.flag2[round-W] <- 1
+				}
+			}
 			continue
 		}
 
 		b,err:= mb.ToJson()
 		log.Println("Get new block round",mb.Round)
 		//将新产生的main block加入到本地视图
+
+		if p.isMining == true{
+			_,ok := p.flag2[round-W]
+			if ok{
+				p.flag2[round-W] <- 1
+			}
+
+		}
+
 		err = p.solveMainBlock(b)
 		if err != nil{
 			log.Fatal(err)
@@ -401,7 +361,7 @@ func (p *Peer) Mine() error {
 		time.Sleep(time.Second*time.Duration(IntervalOfLB))
 		//产生ledger block
 		go p.createLB(mb)
-}
+	}
 	return nil
 }
 
@@ -425,7 +385,7 @@ func (p *Peer) mineBlock(c chan *block.MainBlock) error{
 
 	s := rand.NewSource(time.Now().Unix()+p.bias)
 	r := rand.New(s)
-	miningTime := r.Intn(60*(LongestTimeOfMining-LeastTimeOfMining)*numOfPeer)+LeastTimeOfMining*60
+	miningTime := r.Intn((LongestTimeOfMining-LeastTimeOfMining)*numOfPeer)+LeastTimeOfMining
 	log.Println("[info]-[mineBlock]:mining time is",miningTime,"and mining round",p.currentMB.Round+1)
  	time.Sleep(time.Duration(miningTime)*time.Second)
 
@@ -457,14 +417,21 @@ func (p *Peer) createLB(mb *block.MainBlock) error {
 	CreateLB:
 		for {
 			select {
-			case <- p.flag2:
+			case <- p.flag2[int(round)]:
+				delete(p.flag2,int(round))
 				break CreateLB
 			default:
 				if i == 0{
-					preHash,_ = p.templc.LastLedgerBlock().Hash()
-					lb := block.NewLedgerBlock(uint32(3),mb.Round,uint32(i),p.owner,preHash,hash)
-					preHash,_ = lb.HeadOfLB.Hash()
+					var lb *block.LedgerBlock
+					_,ok := p.templc[round-W]
+					if ok {
+						preHash,_ = p.templc[round-W].LastLedgerBlock().Hash()
+						lb = block.NewLedgerBlock(uint32(3),mb.Round,uint32(i),p.owner,preHash,hash)
+					} else {
+						lb = block.NewLedgerBlock(uint32(3),mb.Round,uint32(i),p.owner,preHash,hash)
+					}
 
+					preHash,_ = lb.HeadOfLB.Hash()
 					b,err := lb.ToJson()
 					if err != nil{
 						log.Fatal(err)
@@ -488,7 +455,7 @@ func (p *Peer) createLB(mb *block.MainBlock) error {
 					//log.Println(string(p.owner),"create round",lb.HeadOfLB.Round,"epoch",lb.HeadOfLB.Epoch)
 					i++
 				}else {
-					lb := block.NewLedgerBlock(uint32(2),p.templc.Round,uint32(i),p.owner,preHash,hash)
+					lb := block.NewLedgerBlock(uint32(2),round,uint32(i),p.owner,preHash,hash)
 					preHash,_ = lb.HeadOfLB.Hash()
 					b,err := lb.ToJson()
 					if err != nil{
@@ -532,11 +499,12 @@ func NewPeer(ip string,RemoteIp string,owner []byte,bias int64) *Peer {
 	p := Peer{
 		ip:ip,
 		RemoteIp:RemoteIp,
+		minedMB:&mb,
 		mc:chain.NewMainChain(),
-		templc:chain.NewTLC(),
+		templc:make(map[uint32]*chain.TempLedgerChain),
 		owner:owner,
 		flag1:make(chan int,1),
-		flag2:make(chan int,1),
+		flag2:make(map[int] chan int),
 		currentMB:&mb,
 		bias:bias,
 		isMining:false,

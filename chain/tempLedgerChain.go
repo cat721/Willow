@@ -5,15 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"github.com/garyburd/redigo/redis"
-	"os"
 )
 
-//const RedisAdd = "127.0.0.1:6379"
-var RedisAdd string
+const RedisAdd = "127.0.0.1:6379"
+
+/*var RedisAdd string
 
 func init() {
 	RedisAdd = os.Getenv("RedisAdd")
 }
+*/
 
 type TempLedgerChain struct {
 	Round uint32
@@ -41,9 +42,6 @@ func NewTLC() *TempLedgerChain{
 
 func (TempLChain *TempLedgerChain) ExtractLedgerChain(hlb *block.HeadOfLB) error {
 
-	if TempLChain.Round != hlb.Round-1 {
-		return errors.New("[ExtractLedgerChain]:The first ledgerblock is not belong to next round")
-	}
 	_,ok := TempLChain.MapTree[hlb.PreHash]
 	if !ok {
 		return errors.New("[ExtractLedgerChain]:wrong local tempLedgerChain")
